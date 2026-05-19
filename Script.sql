@@ -294,3 +294,179 @@ JOIN pedidos p ON c.id = p.clienteid
 GROUP BY c.nome
 HAVING SUM(p.quantidade * p.precovenda) > 1000
 ORDER BY total_gasto DESC;
+
+-- Aula 8 
+
+DROP PROCEDURE public.transferencia(int4, int4, numeric);
+
+CREATE OR REPLACE PROCEDURE public.transferencia(IN p_in_origem integer, IN p_in_destino integer, IN valor numeric)
+LANGUAGE plpgsql
+AS $procedure$
+BEGIN
+update conta set saldo = saldo - valor where id = p_in_origem;
+update conta set saldo = saldo + valor where id = p_in_destino;
+
+exception
+when others then
+rollback;
+
+raise notice 'Erro na transferencia %', SQLERRM;
+END;
+$procedure$
+;
+
+call transferencia(1, 2, 30)
+
+grant select on table conta to usuario_teste
+
+try:
+result = 10 / 0 # This will raise a ZeroDivisionError
+except ZeroDivisionError:
+print("You cannot divide by zero!")
+finally:
+print("Execution complete.")
+
+-- Aula 9 
+trigger_validar_cpf CREATE OR REPLACE FUNCTION trg_validar_cpf()
+RETURNS TRIGGER AS $$
+BEGIN
+IF NOT validar_cpf(NEW.cpf) THEN
+RAISE EXCEPTION 'CPF inválido: %', NEW.cpf;
+END IF;
+
+RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER validar_cpf_clientes
+BEFORE INSERT ON clientes
+FOR EACH ROW
+EXECUTE FUNCTION trg_validar_cpf();
+
+--funcao_validar_cpf CREATE OR REPLACE FUNCTION public.validar_cpf(cpf text)
+RETURNS boolean
+LANGUAGE plpgsql
+AS $function$
+DECLARE
+cpf_limpo TEXT;
+soma INT;
+resto INT;
+i INT;
+dig1 INT;
+dig2 INT;
+BEGIN
+-- remove caracteres não numéricos
+cpf_limpo := regexp_replace(cpf, '[^0-9]', '', 'g');
+
+-- tamanho inválido
+IF length(cpf_limpo) <> 11 THEN
+RETURN FALSE;
+END IF;
+
+-- elimina CPFs inválidos conhecidos
+IF cpf_limpo ~ '^(.)\1{10}$' THEN
+RETURN FALSE;
+END IF;
+
+-- cálculo do 1º dígito
+soma := 0;
+FOR i IN 1..9 LOOP
+soma := soma + (substring(cpf_limpo, i, 1)::INT * (11 - i));
+END LOOP;
+
+resto := soma % 11;
+IF resto < 2 THEN
+dig1 := 0;
+ELSE
+dig1 := 11 - resto;
+END IF;
+
+-- cálculo do 2º dígito
+soma := 0;
+FOR i IN 1..10 LOOP
+soma := soma + (substring(cpf_limpo, i, 1)::INT * (12 - i));
+END LOOP;
+
+resto := soma % 11;
+IF resto < 2 THEN
+dig2 := 0;
+ELSE
+dig2 := 11 - resto;
+END IF;
+
+-- valida dígitos finais
+IF dig1 = substring(cpf_limpo, 10, 1)::INT AND
+dig2 = substring(cpf_limpo, 11, 1)::INT THEN
+RETURN TRUE;
+ELSE
+RETURN FALSE;
+END IF;
+END;
+$function$
+;
+
+-- Aula 10 
+ TCL CREATE TABLE conta (
+id SERIAL PRIMARY KEY,
+titular VARCHAR(100),
+saldo NUMERIC(10,2) CHECK (saldo >= 0)
+);
+
+INSERT INTO conta (id, titular, saldo)
+VALUES
+(1, 'João', 1000),
+(2, 'Maria', 500);
+
+
+
+UPDATE conta
+SET saldo = saldo - 100
+WHERE id = 1;
+
+UPDATE conta
+SET saldo = -500
+WHERE id = 2;
+
+
+
+BEGIN;
+
+UPDATE conta
+SET saldo = saldo - 100
+WHERE id = 1;
+
+-- ERRO
+UPDATE conta
+SET saldo = -500
+WHERE id = 2;
+
+ROLLBACK;
+
+
+CREATE OR REPLACE PROCEDURE transferencia(
+origem INT,
+destino INT,
+valor NUMERIC
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+
+UPDATE conta
+SET saldo = saldo - valor
+WHERE id = origem;
+
+UPDATE conta
+SET saldo = saldo + valor
+WHERE id = destino;
+
+EXCEPTION
+WHEN OTHERS THEN
+
+ROLLBACK;
+
+RAISE NOTICE 'Erro na transferência: %', SQLERRM;
+END;
+$$;
+
+CALL transferencia(1, 2, 100);
